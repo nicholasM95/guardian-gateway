@@ -1,3 +1,11 @@
 spring:
   application:
     name: guardian-gateway
+
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            ssl:
+              use-insecure-trust-manager: true
