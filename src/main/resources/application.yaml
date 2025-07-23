@@ -2,5 +2,10 @@ spring:
   application:
     name: guardian-gateway
 
-server:
-  port: 8080
+  cloud:
+    gateway:
+      server:
+        webflux:
+          httpclient:
+            ssl:
+              use-insecure-trust-manager: true

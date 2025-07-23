@@ -3,9 +3,13 @@ package be.nicholasmeyers.guardiangateway.config;
 import be.nicholasmeyers.guardiangateway.cert.CertStore;
 import be.nicholasmeyers.guardiangateway.cert.CertUpdateEvent;
 import be.nicholasmeyers.guardiangateway.cert.CertificateInfo;
+import be.nicholasmeyers.guardiangateway.https.DummySslContextGenerator;
 import be.nicholasmeyers.guardiangateway.https.ReloadingSslContextSupplier;
+import io.netty.handler.ssl.SniHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.util.DomainWildcardMappingBuilder;
+import io.netty.util.Mapping;
 import org.springframework.boot.web.embedded.netty.NettyReactiveWebServerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,45 +17,83 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.event.EventListener;
 import org.springframework.http.server.reactive.HttpHandler;
 import org.springframework.http.server.reactive.ReactorHttpHandlerAdapter;
+import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import javax.net.ssl.SSLException;
 import java.util.List;
+import java.util.logging.Logger;
 
 @Configuration
 public class MultiPortConfig {
 
-    private final ReloadingSslContextSupplier supplier;
-    private final CertStore certStore;
+    private static final Logger logger = Logger.getLogger(MultiPortConfig.class.getName());
 
-    public MultiPortConfig(CertStore certStore) {
-        this.supplier = new ReloadingSslContextSupplier();
+    private final CertStore certStore;
+    private final ApplicationProperties applicationProperties;
+    private final ReloadingSslContextSupplier sslSupplier;
+    private DisposableServer httpsServer;
+    private final HttpHandler httpHandler;
+
+    public MultiPortConfig(CertStore certStore, ApplicationProperties applicationProperties, HttpHandler httpHandler) {
         this.certStore = certStore;
+        this.applicationProperties = applicationProperties;
+        this.httpHandler = httpHandler;
+        this.sslSupplier = new ReloadingSslContextSupplier();
     }
 
     @Bean
     @Primary
-    public NettyReactiveWebServerFactory webServerFactory(HttpHandler httpHandler) {
+    public NettyReactiveWebServerFactory httpServerFactory() {
         NettyReactiveWebServerFactory factory = new NettyReactiveWebServerFactory();
-        factory.setPort(443);
-
-        factory.addServerCustomizers(httpServer ->
-                httpServer.secure(sslContextSpec ->
-                        sslContextSpec.sslContext(supplier.get())
-                )
-        );
-
-        HttpServer.create()
-                .port(80)
-                .handle(new ReactorHttpHandlerAdapter(httpHandler))
-                .bindNow();
-
+        factory.setPort(80);
         return factory;
     }
 
     @EventListener
-    public void handleCertificatesReloaded(CertUpdateEvent event) {
-        if (!certStore.isEmpty()) {
+    public void handleCertificatesReloaded(CertUpdateEvent event) throws SSLException {
+        if (certStore.getAll().size() >= applicationProperties.getConfig().size()) {
+            startHttpsServer();
+        }
+
+        updateSslContext();
+    }
+
+    private void startHttpsServer() throws SSLException {
+        if (httpsServer != null) return;
+
+        logger.info("Starting HTTPS server on port 443...");
+
+        SslContext defaultSsl = DummySslContextGenerator.create();
+        DomainWildcardMappingBuilder<SslContext> mappingBuilder = new DomainWildcardMappingBuilder<>(defaultSsl);
+
+        List<CertificateInfo> certs = certStore.getAll();
+        for (CertificateInfo cert : certs) {
+            mappingBuilder.add(cert.domain(), createSslContextForCert(cert));
+        }
+
+        Mapping<String, SslContext> sniMapping = mappingBuilder.build();
+
+        httpsServer = HttpServer.create()
+                .port(443)
+                .doOnChannelInit((observer, channel, remoteAddress) -> {
+                    channel.pipeline().addFirst(new SniLoggingHandler());
+                    channel.pipeline().addFirst(new SniHandler(sniMapping));
+                })
+                .handle(new ReactorHttpHandlerAdapter(httpHandler))
+                .bindNow();
+
+    }
+
+    private SslContext createSslContextForCert(CertificateInfo cert) throws SSLException {
+        return SslContextBuilder.forServer(cert.keyPair().getPrivate(), cert.certificate())
+                .build();
+    }
+
+    private void updateSslContext() {
+        if (certStore.isEmpty()) return;
+
+        try {
             List<CertificateInfo> certs = certStore.getAll();
 
             SslContextBuilder builder = SslContextBuilder.forServer(
@@ -66,12 +108,10 @@ public class MultiPortConfig {
                 );
             }
 
-            try {
-                SslContext sslContext = builder.build();
-                supplier.updateSslContext(sslContext);
-            } catch (SSLException e) {
-                throw new RuntimeException(e);
-            }
+            sslSupplier.updateSslContext(builder.build());
+            logger.info("SSL Context updated");
+        } catch (SSLException e) {
+            throw new RuntimeException("Failed to update SSL context", e);
         }
     }
 }

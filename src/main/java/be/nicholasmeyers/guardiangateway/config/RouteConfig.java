@@ -15,7 +15,10 @@ public class RouteConfig {
         applicationProperties.getConfig().forEach(config -> {
             routes.route(config.getName(), r -> r
                     .host(config.getHost())
-                    .filters(f -> f.addRequestHeader("X-From-Gateway", "true"))
+                    .filters(f -> f
+                            .preserveHostHeader()
+                            .addRequestHeader("X-Forwarded-Host", config.getHost())
+                    )
                     .uri(config.getService()));
         });
 
