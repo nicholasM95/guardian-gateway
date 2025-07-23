@@ -21,6 +21,7 @@ import reactor.netty.DisposableServer;
 import reactor.netty.http.server.HttpServer;
 
 import javax.net.ssl.SSLException;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -86,7 +87,8 @@ public class MultiPortConfig {
     }
 
     private SslContext createSslContextForCert(CertificateInfo cert) throws SSLException {
-        return SslContextBuilder.forServer(cert.keyPair().getPrivate(), cert.certificate())
+        return SslContextBuilder
+                .forServer(cert.keyPair().getPrivate(), cert.certificateChain().toArray(new X509Certificate[0]))
                 .build();
     }
 
