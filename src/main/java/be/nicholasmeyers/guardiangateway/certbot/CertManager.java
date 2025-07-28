@@ -25,9 +25,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManagerFactory;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -39,7 +36,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.KeyPair;
-import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
@@ -48,6 +44,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -163,10 +160,18 @@ public class CertManager {
 
     private void loadCertificateFromFile(String domain, Path certPath, Path keyPath) throws Exception {
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        X509Certificate certificate;
+        List<X509Certificate> certificateChain;
         try (InputStream certStream = Files.newInputStream(certPath)) {
-            certificate = (X509Certificate) cf.generateCertificate(certStream);
+            certificateChain = cf.generateCertificates(certStream).stream()
+                    .map(cert -> (X509Certificate) cert)
+                    .toList();
         }
+
+        if (certificateChain.isEmpty()) {
+            throw new IllegalArgumentException("Certificate file is empty or invalid");
+        }
+
+        X509Certificate leafCert = certificateChain.getFirst();
 
         PrivateKey privateKey;
         try (Reader keyReader = new BufferedReader(new FileReader(keyPath.toFile()));
@@ -187,22 +192,21 @@ public class CertManager {
             }
         }
 
-        KeyPair keyPair = new KeyPair(certificate.getPublicKey(), privateKey);
-        SSLContext sslContext = createSSLContext(certificate, keyPair);
+        KeyPair keyPair = new KeyPair(leafCert.getPublicKey(), privateKey);
 
         CertificateInfo certInfo = new CertificateInfo(
                 domain,
-                certificate,
+                leafCert,
                 keyPair,
-                sslContext,
-                certificate.getNotAfter().toInstant(),
+                certificateChain,
+                leafCert.getNotAfter().toInstant(),
                 LocalDateTime.now()
         );
 
         certStore.put(domain, certInfo);
         eventPublisher.publishEvent(new CertUpdateEvent(certInfo));
 
-        logger.info("Loaded certificate from file for domain: " + domain);
+        logger.info("Loaded certificate and full chain from file for domain: " + domain);
     }
 
     private void requestMissingCertificates() {
@@ -254,15 +258,14 @@ public class CertManager {
         Certificate certificate = order.getCertificate();
         X509Certificate x509Certificate = certificate.getCertificate();
 
-        saveCertificate(domain, x509Certificate, domainKeyPair);
-
-        SSLContext sslContext = createSSLContext(x509Certificate, domainKeyPair);
+        List<X509Certificate> certChain = certificate.getCertificateChain();
+        saveFullCertificateChain(domain, certChain, domainKeyPair);
 
         CertificateInfo certInfo = new CertificateInfo(
                 domain,
                 x509Certificate,
                 domainKeyPair,
-                sslContext,
+                certChain,
                 x509Certificate.getNotAfter().toInstant(),
                 LocalDateTime.now()
         );
@@ -303,13 +306,15 @@ public class CertManager {
         logger.info("Challenge completed successfully for domain: " + domain);
     }
 
-    private void saveCertificate(String domain, X509Certificate certificate, KeyPair keyPair) throws Exception {
+    private void saveFullCertificateChain(String domain, List<X509Certificate> certChain, KeyPair keyPair) throws Exception {
         Path domainDir = Paths.get(certificatesPath, domain);
         Files.createDirectories(domainDir);
 
         Path certPath = domainDir.resolve("certificate.crt");
         try (FileWriter fw = new FileWriter(certPath.toFile())) {
-            writeCertificatePem(certificate, fw);
+            for (X509Certificate cert : certChain) {
+                writeCertificatePem(cert, fw);
+            }
         }
 
         Path keyPath = domainDir.resolve("private.key");
@@ -324,26 +329,6 @@ public class CertManager {
         writer.write(Base64.getMimeEncoder(64, "\n".getBytes()).encodeToString(certificate.getEncoded()));
         writer.write("\n-----END CERTIFICATE-----\n");
         writer.flush();
-    }
-
-
-    private SSLContext createSSLContext(X509Certificate certificate, KeyPair keyPair) throws Exception {
-        KeyStore keyStore = KeyStore.getInstance("JKS");
-        keyStore.load(null, null);
-
-        keyStore.setKeyEntry("key", keyPair.getPrivate(),
-                "password".toCharArray(), new X509Certificate[]{certificate});
-
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-        kmf.init(keyStore, "password".toCharArray());
-
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-        tmf.init((KeyStore) null);
-
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-
-        return sslContext;
     }
 
     private void startRenewalScheduler() {
