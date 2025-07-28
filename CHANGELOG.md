@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/nicholasM95/guardian-gateway/compare/v1.0.0...v1.0.1) (2025-07-28)
+
+
+### Bug Fixes
+
+* include full certificate chain in Netty SslContext ([0a9ee53](https://github.com/nicholasM95/guardian-gateway/commit/0a9ee53d5dbbb124ff50a1249fa95e5d016ab1c2))
+
 # 1.0.0 (2025-07-23)
 
 
