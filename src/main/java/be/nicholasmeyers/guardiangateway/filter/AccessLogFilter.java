@@ -41,6 +41,10 @@ public class AccessLogFilter implements WebFilter {
                     logEntry.put("timestamp", Instant.now().toString());
                     logEntry.put("method", exchange.getRequest().getMethod().name());
                     logEntry.put("path", exchange.getRequest().getURI().getPath());
+                    logEntry.put("schema", exchange.getRequest().getURI().getScheme() != null
+                            ? exchange.getRequest().getURI().getScheme() : "unknown");
+                    logEntry.put("port", String.valueOf(exchange.getRequest().getURI().getPort() != -1
+                            ? exchange.getRequest().getURI().getPort() : getDefaultPort(exchange.getRequest().getURI().getScheme())));
                     logEntry.put("client_ip", exchange.getRequest().getRemoteAddress() != null
                             ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress() : "unknown");
                     logEntry.put("status_code", String.valueOf(exchange.getResponse().getStatusCode() != null
@@ -51,7 +55,15 @@ public class AccessLogFilter implements WebFilter {
                             ? exchange.getRequest().getHeaders().getFirst("User-Agent") : "N/A");
                     logEntry.put("host", exchange.getRequest().getHeaders().getFirst("Host") != null
                             ? exchange.getRequest().getHeaders().getFirst("Host") : "N/A");
-                    logEntry.put("request_status", (String) exchange.getAttributes().get("status"));
+                    String requestStatus = (String) exchange.getAttributes().get("status");
+                    int statusCode = exchange.getResponse().getStatusCode() != null
+                            ? exchange.getResponse().getStatusCode().value() : 0;
+
+                    if ((requestStatus == null || requestStatus.isEmpty()) && statusCode == 301) {
+                        log.info("Override request status to ALLOWED");
+                        requestStatus = "ALLOWED";
+                    }
+                    logEntry.put("request_status", requestStatus);
 
                     return redisTemplate.opsForStream().add("access_logs", logEntry)
                             .doOnSuccess(recordId -> log.info("Successfully added log entry to stream with ID: {}", recordId.getValue()))
@@ -59,5 +71,14 @@ public class AccessLogFilter implements WebFilter {
                             .then()
                             .subscribeOn(Schedulers.boundedElastic());
                 }));
+    }
+
+    private int getDefaultPort(String scheme) {
+        if ("https".equalsIgnoreCase(scheme)) {
+            return 443;
+        } else if ("http".equalsIgnoreCase(scheme)) {
+            return 80;
+        }
+        return 0;
     }
 }
