@@ -51,6 +51,7 @@ public class AccessLogFilter implements WebFilter {
                             ? exchange.getRequest().getHeaders().getFirst("User-Agent") : "N/A");
                     logEntry.put("host", exchange.getRequest().getHeaders().getFirst("Host") != null
                             ? exchange.getRequest().getHeaders().getFirst("Host") : "N/A");
+                    logEntry.put("request_status", (String) exchange.getAttributes().get("status"));
 
                     return redisTemplate.opsForStream().add("access_logs", logEntry)
                             .doOnSuccess(recordId -> log.info("Successfully added log entry to stream with ID: {}", recordId.getValue()))
