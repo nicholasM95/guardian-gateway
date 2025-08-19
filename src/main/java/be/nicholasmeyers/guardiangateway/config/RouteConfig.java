@@ -5,6 +5,8 @@ import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import static be.nicholasmeyers.guardiangateway.config.RouteType.PROXY;
+
 @Configuration
 public class RouteConfig {
 
@@ -13,13 +15,20 @@ public class RouteConfig {
         RouteLocatorBuilder.Builder routes = builder.routes();
 
         applicationProperties.getConfig().forEach(config -> {
-            routes.route(config.getName(), r -> r
-                    .host(config.getHost())
-                    .filters(f -> f
-                            .preserveHostHeader()
-                            .addRequestHeader("X-Forwarded-Host", config.getHost())
-                    )
-                    .uri(config.getService()));
+            if (PROXY.equals(config.getType())) {
+                routes.route(config.getName(), r -> r
+                        .host(config.getHost())
+                        .filters(f -> f
+                                .preserveHostHeader()
+                                .addRequestHeader("X-Forwarded-Host", config.getHost())
+                        )
+                        .uri(config.getService()));
+            } else {
+                routes.route(config.getName(), r -> r
+                        .host(config.getHost())
+                        .filters(f -> f.redirect(301, config.getService()))
+                        .uri("no://op"));
+            }
         });
 
         return routes.build();

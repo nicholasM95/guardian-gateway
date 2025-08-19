@@ -4,6 +4,7 @@ public class ApplicationConfig {
     private String name;
     private String service;
     private String host;
+    private RouteType type;
 
     public String getName() {
         return name;
@@ -27,5 +28,13 @@ public class ApplicationConfig {
 
     public void setHost(String host) {
         this.host = host;
+    }
+
+    public RouteType getType() {
+        return type;
+    }
+
+    public void setType(RouteType type) {
+        this.type = type;
     }
 }
