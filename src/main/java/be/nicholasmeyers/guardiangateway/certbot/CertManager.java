@@ -19,6 +19,8 @@ import org.shredzone.acme4j.Status;
 import org.shredzone.acme4j.challenge.Http01Challenge;
 import org.shredzone.acme4j.util.CSRBuilder;
 import org.shredzone.acme4j.util.KeyPairUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -49,12 +51,12 @@ import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 @Component
 public class CertManager {
 
-    private static final Logger logger = Logger.getLogger(CertManager.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(CertManager.class);
+
     private final ApplicationEventPublisher eventPublisher;
     private final ApplicationProperties properties;
     private final ChallengeStore challengeStore;
@@ -93,9 +95,9 @@ public class CertManager {
             requestMissingCertificates();
             startRenewalScheduler();
 
-            logger.info("ACME Certificate Manager initialized successfully");
+            log.info("ACME Certificate Manager initialized successfully");
         } catch (Exception e) {
-            logger.severe("Failed to initialize ACME Certificate Manager: " + e.getMessage());
+            log.error("Failed to initialize ACME Certificate Manager: {}", e.getMessage());
             throw new RuntimeException(e);
         }
     }
@@ -118,19 +120,19 @@ public class CertManager {
         }
 
         account = accountBuilder.create(session);
-        logger.info("ACME account created/loaded successfully");
+        log.info("ACME account created/loaded successfully");
     }
 
     private KeyPair loadOrCreateAccountKeyPair() throws Exception {
         Path keyPath = Paths.get(accountKeyPath);
 
         if (Files.exists(keyPath)) {
-            logger.info("Loading existing account key pair");
+            log.info("Loading existing account key pair");
             try (FileReader fr = new FileReader(keyPath.toFile())) {
                 return KeyPairUtils.readKeyPair(fr);
             }
         } else {
-            logger.info("Creating new account key pair");
+            log.info("Creating new account key pair");
             KeyPair keyPair = KeyPairUtils.createKeyPair(2048);
 
             try (FileWriter fw = new FileWriter(keyPath.toFile())) {
@@ -153,7 +155,7 @@ public class CertManager {
                             loadCertificateFromFile(host, certPath, keyPath);
                         }
                     } catch (Exception e) {
-                        logger.warning("Failed to load existing certificate for " + host + ": " + e.getMessage());
+                        log.warn("Failed to load existing certificate for {} : {}", host, e.getMessage());
                     }
                 });
     }
@@ -206,14 +208,14 @@ public class CertManager {
         certStore.put(domain, certInfo);
         eventPublisher.publishEvent(new CertUpdateEvent(certInfo));
 
-        logger.info("Loaded certificate and full chain from file for domain: " + domain);
+        log.info("Loaded certificate and full chain from file for domain: {}", domain);
     }
 
     private void requestMissingCertificates() {
         properties.getConfig().stream().map(ApplicationConfig::getHost)
                 .forEach(host -> {
                     if (!certStore.contains(host)) {
-                        logger.info("Requesting new certificate for domain: " + host);
+                        log.info("Requesting new certificate for domain: {}", host);
                         requestCertificateAsync(host);
                     }
                 });
@@ -225,13 +227,13 @@ public class CertManager {
             try {
                 requestCertificate(domain);
             } catch (Exception e) {
-                logger.severe("Failed to request certificate for " + domain + ": " + e.getMessage());
+                log.error("Failed to request certificate for {} : {}", domain, e.getMessage());
             }
         });
     }
 
     private void requestCertificate(String domain) throws Exception {
-        logger.info("Starting certificate request for domain: " + domain);
+        log.info("Starting certificate request for domain: {}", domain);
 
         Order order = account.newOrder().domain(domain).create();
 
@@ -272,11 +274,11 @@ public class CertManager {
 
         certStore.put(domain, certInfo);
         eventPublisher.publishEvent(new CertUpdateEvent(certInfo));
-        logger.info("Certificate successfully obtained and stored for domain: " + domain);
+        log.info("Certificate successfully obtained and stored for domain: {}", domain);
     }
 
     private void processAuthorization(Authorization auth) throws Exception {
-        logger.info("Processing authorization for domain: " + auth.getIdentifier().getDomain());
+        log.info("Processing authorization for domain: {}", auth.getIdentifier().getDomain());
 
         Optional<Http01Challenge> challenge = auth.findChallenge(Http01Challenge.TYPE);
         if (challenge.isEmpty()) {
@@ -289,7 +291,7 @@ public class CertManager {
 
         challengeStore.add(token, authorization);
 
-        logger.info("Challenge stored for domain " + domain + " with token: " + token);
+        log.info("Challenge stored for domain {} with token: {}", domain, token);
 
         challenge.get().trigger();
 
@@ -303,7 +305,7 @@ public class CertManager {
 
         challengeStore.remove(token);
 
-        logger.info("Challenge completed successfully for domain: " + domain);
+        log.info("Challenge completed successfully for domain: {}", domain);
     }
 
     private void saveFullCertificateChain(String domain, List<X509Certificate> certChain, KeyPair keyPair) throws Exception {
@@ -321,7 +323,7 @@ public class CertManager {
         try (FileWriter fw = new FileWriter(keyPath.toFile())) {
             KeyPairUtils.writeKeyPair(keyPair, fw);
         }
-        logger.info("Certificate and key saved for domain: " + domain);
+        log.info("Certificate and key saved for domain: {}", domain);
     }
 
     private void writeCertificatePem(X509Certificate certificate, Writer writer) throws IOException, CertificateEncodingException {
@@ -334,7 +336,7 @@ public class CertManager {
     private void startRenewalScheduler() {
         scheduler = Executors.newScheduledThreadPool(1);
         scheduler.scheduleAtFixedRate(() -> {
-            logger.info("Checking certificates for renewal...");
+            log.info("Checking certificates for renewal...");
 
             properties.getConfig().stream().map(ApplicationConfig::getHost)
                     .forEach(host -> {
@@ -344,7 +346,7 @@ public class CertManager {
                                     .minus(Duration.ofDays(renewalDaysBefore));
 
                             if (Instant.now().isAfter(renewalTime)) {
-                                logger.info("Certificate for " + host + " needs renewal");
+                                log.info("Certificate for {} needs renewal", host);
                                 requestCertificateAsync(host);
                             }
                         }

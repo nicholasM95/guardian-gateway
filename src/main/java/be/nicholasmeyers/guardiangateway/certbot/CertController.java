@@ -2,6 +2,8 @@ package be.nicholasmeyers.guardiangateway.certbot;
 
 import be.nicholasmeyers.guardiangateway.config.ApplicationConfig;
 import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -12,13 +14,12 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/.well-known/acme-challenge")
 public class CertController {
 
-    private static final Logger logger = Logger.getLogger(CertController.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(CertController.class);
 
     private final ChallengeStore challengeStore;
     private final ApplicationProperties applicationProperties;
@@ -35,19 +36,19 @@ public class CertController {
         Optional<String> host = Optional.ofNullable(headers.get("host"));
         Optional<String> authorization = challengeStore.get(token);
         if (authorization.isPresent()) {
-            logger.info("Serving ACME challenge for token");
+            log.info("Serving ACME challenge for token");
             return Mono.just(authorization.get());
         } else {
             if (host.isPresent()) {
                 return getChallengeFromUpstream(host.get(), token);
             }
-            logger.warning("ACME challenge token not found");
+            log.warn("ACME challenge token not found");
             throw new RuntimeException("Token not found");
         }
     }
 
     private Mono<String> getChallengeFromUpstream(String host, String token) {
-        logger.info("Serving ACME challenge for token from upstream");
+        log.info("Serving ACME challenge for token from upstream");
         Optional<ApplicationConfig> config = applicationProperties.findConfigByHost(host);
         if (config.isPresent()) {
             String service = config.get().getService();
@@ -58,10 +59,10 @@ public class CertController {
                     .uri(url)
                     .retrieve()
                     .bodyToMono(String.class)
-                    .doOnSubscribe(sub -> logger.info("Fetching challenge from upstream: " + url))
-                    .doOnError(err -> logger.severe("Failed to fetch challenge from upstream: " + err.getMessage()));
+                    .doOnSubscribe(sub -> log.info("Fetching challenge from upstream: {}", url))
+                    .doOnError(err -> log.error("Failed to fetch challenge from upstream: {}", err.getMessage()));
         } else {
-            logger.warning("ACME challenge upstream not found: application config not found");
+            log.warn("ACME challenge upstream not found: application config not found");
             return Mono.just("");
         }
     }

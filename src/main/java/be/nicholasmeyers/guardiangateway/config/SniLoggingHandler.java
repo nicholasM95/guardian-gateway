@@ -3,12 +3,13 @@ package be.nicholasmeyers.guardiangateway.config;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.ssl.SniCompletionEvent;
-
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SniLoggingHandler extends ChannelInboundHandlerAdapter {
 
-    private static final Logger logger = Logger.getLogger(SniLoggingHandler.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(SniLoggingHandler.class);
+
 
     @Override
     public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
@@ -16,9 +17,9 @@ public class SniLoggingHandler extends ChannelInboundHandlerAdapter {
             SniCompletionEvent event = (SniCompletionEvent) evt;
             String hostname = event.hostname();
             if (event.isSuccess()) {
-                logger.info("SNI handshake succeeded, hostname: " + hostname);
+                log.info("SNI handshake succeeded, hostname: {}", hostname);
             } else {
-                logger.severe("SNI handshake failed or hostname missing");
+                log.error("SNI handshake failed or hostname missing");
             }
         }
         super.userEventTriggered(ctx, evt);

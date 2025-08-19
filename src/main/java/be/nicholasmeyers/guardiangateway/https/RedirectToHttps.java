@@ -1,7 +1,8 @@
 package be.nicholasmeyers.guardiangateway.https;
 
-import java.util.logging.Logger;
-
+import be.nicholasmeyers.guardiangateway.config.SniLoggingHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -16,7 +17,7 @@ import java.net.URI;
 
 @Component
 public class RedirectToHttps {
-    private static final Logger logger = Logger.getLogger(RedirectToHttps.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(RedirectToHttps.class);
 
     @Bean
     public WebFilter httpsRedirectFilter() {
@@ -27,10 +28,10 @@ public class RedirectToHttps {
             String path = request.getURI().getPath();
 
             if (path.startsWith("/.well-known/acme-challenge")) {
-                logger.info("No redirect for /.well-known/acme-challenge");
+                log.info("No redirect for /.well-known/acme-challenge");
                 return chain.filter(exchange);
             } else if ("http".equals(request.getURI().getScheme())) {
-                logger.info("Redirect to https");
+                log.info("Redirect to https");
                 String httpsUrl = UriComponentsBuilder.fromUri(request.getURI())
                         .scheme("https")
                         .build()

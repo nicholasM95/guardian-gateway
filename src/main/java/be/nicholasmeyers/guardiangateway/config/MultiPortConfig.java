@@ -10,6 +10,8 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.util.DomainWildcardMappingBuilder;
 import io.netty.util.Mapping;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.embedded.netty.NettyReactiveWebServerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,12 +25,11 @@ import reactor.netty.http.server.HttpServer;
 import javax.net.ssl.SSLException;
 import java.security.cert.X509Certificate;
 import java.util.List;
-import java.util.logging.Logger;
 
 @Configuration
 public class MultiPortConfig {
 
-    private static final Logger logger = Logger.getLogger(MultiPortConfig.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(MultiPortConfig.class);
 
     private final CertStore certStore;
     private final ApplicationProperties applicationProperties;
@@ -63,7 +64,7 @@ public class MultiPortConfig {
     private void startHttpsServer() throws SSLException {
         if (httpsServer != null) return;
 
-        logger.info("Starting HTTPS server on port 443...");
+        log.info("Starting HTTPS server on port 443...");
 
         SslContext defaultSsl = DummySslContextGenerator.create();
         DomainWildcardMappingBuilder<SslContext> mappingBuilder = new DomainWildcardMappingBuilder<>(defaultSsl);
@@ -111,7 +112,7 @@ public class MultiPortConfig {
             }
 
             sslSupplier.updateSslContext(builder.build());
-            logger.info("SSL Context updated");
+            log.info("SSL Context updated");
         } catch (SSLException e) {
             throw new RuntimeException("Failed to update SSL context", e);
         }
