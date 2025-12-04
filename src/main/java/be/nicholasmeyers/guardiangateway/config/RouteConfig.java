@@ -29,6 +29,10 @@ public class RouteConfig {
                                 .preserveHostHeader()
                                 .addRequestHeader("X-Forwarded-Host", config.getHost())
                                 .filter(hostRequiredRule.hostRequiredFilter())
+                                .addResponseHeader("Access-Control-Allow-Origin", "*")
+                                .addResponseHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+                                .addResponseHeader("Access-Control-Allow-Headers", "*")
+                                .addResponseHeader("Access-Control-Max-Age", "3600")
                         )
                         .uri(config.getService()));
             } else {
