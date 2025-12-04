@@ -9,7 +9,7 @@ import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import java.util.Arrays;
 
 
-@Configuration
+/*@Configuration
 public class CorsConfig {
 
     @Bean
@@ -30,4 +30,4 @@ public class CorsConfig {
 
         return new CorsWebFilter(source);
     }
-}
+}*/
