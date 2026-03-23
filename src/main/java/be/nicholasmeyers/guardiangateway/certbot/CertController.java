@@ -59,6 +59,7 @@ public class CertController {
             String url = "http://" + service + "/.well-known/acme-challenge/" + token;
             return webClient.get()
                     .uri(url)
+                    .header("Host", host)
                     .retrieve()
                     .onStatus(status -> status.value() == 404, response -> {
                         log.warn("Resource not found (404): {} --- host: {}", url, host);
