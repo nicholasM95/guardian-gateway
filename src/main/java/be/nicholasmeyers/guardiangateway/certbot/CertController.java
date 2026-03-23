@@ -41,6 +41,7 @@ public class CertController {
 
     @GetMapping("/{token}")
     public Mono<String> getChallenge(@RequestHeader Map<String, String> headers, @PathVariable String token) {
+        log.info("Received ACME challenge with headers: {}", headers);
         Optional<String> host = Optional.ofNullable(headers.get("host"));
         Optional<String> authorization = challengeStore.get(token);
         if (authorization.isPresent()) {
