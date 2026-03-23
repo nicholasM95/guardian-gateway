@@ -54,6 +54,8 @@ public class CertController {
             String service = config.get().getService();
             service = service.replace("https://", "");
             service = service.replace("http://", "");
+            service = service.replace(":80/", ":80");
+            service = service.replace(":443/", ":80");
             String url = "http://" + service + "/.well-known/acme-challenge/" + token;
             return webClient.get()
                     .uri(url)

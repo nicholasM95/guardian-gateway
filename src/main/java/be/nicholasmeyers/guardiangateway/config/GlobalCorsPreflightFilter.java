@@ -29,8 +29,6 @@ public class GlobalCorsPreflightFilter implements WebFilter, Ordered {
 
             return exchange.getResponse().setComplete();
         }
-
-        log.info("Not an OPTIONS request, continuing...");
         return chain.filter(exchange);
     }
 
