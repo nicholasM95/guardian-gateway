@@ -59,9 +59,11 @@ public class CertController {
             return webClient.get()
                     .uri(url)
                     .retrieve()
-                    .bodyToMono(String.class)
-                    .doOnSubscribe(sub -> log.info("Fetching challenge from upstream: {}", url))
-                    .doOnError(err -> log.error("Failed to fetch challenge from upstream: {}", err.getMessage()));
+                    .onStatus(status -> status.value() == 404, response -> {
+                        log.warn("Resource not found (404): {} --- host: {}", url, host);
+                        return Mono.empty();
+                    })                    .bodyToMono(String.class)
+                    .doOnSubscribe(sub -> log.info("Fetching challenge from upstream: {} --- host: {}", url, host));
         } else {
             log.warn("ACME challenge upstream not found: application config not found");
             return Mono.just("");
