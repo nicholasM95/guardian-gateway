@@ -4,6 +4,7 @@ import be.nicholasmeyers.guardiangateway.config.ApplicationConfig;
 import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -62,7 +63,13 @@ public class CertController {
                     .onStatus(status -> status.value() == 404, response -> {
                         log.warn("Resource not found (404): {} --- host: {}", url, host);
                         return Mono.empty();
-                    })                    .bodyToMono(String.class)
+                    })
+                    .onStatus(HttpStatusCode::isError, response -> {
+                        log.error("Upstream returned error status {} for: {} --- host: {}",
+                                response.statusCode().value(), url, host);
+                        return Mono.empty();
+                    })
+                    .bodyToMono(String.class)
                     .doOnSubscribe(sub -> log.info("Fetching challenge from upstream: {} --- host: {}", url, host));
         } else {
             log.warn("ACME challenge upstream not found: application config not found");
