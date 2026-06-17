@@ -61,7 +61,7 @@ public class CertController {
     private Mono<String> getChallengeFromGuardianCertManager(String token) {
         log.info("Serving ACME challenge for token from guardian cert manager");
         return webClient.get()
-                .uri("http://guardian-cert-manager:8080/api/v1/acme-challenge/" + token)
+                .uri("http://guardian-cert-manager:8080/.well-known/acme-challenge/" + token)
                 .retrieve()
                 .bodyToMono(String.class)
                 .doOnSubscribe(_ -> log.info("Fetching challenge from guardian cert manager"));
