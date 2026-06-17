@@ -1,6 +1,5 @@
 package be.nicholasmeyers.guardiangateway.https;
 
-import be.nicholasmeyers.guardiangateway.config.SniLoggingHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;

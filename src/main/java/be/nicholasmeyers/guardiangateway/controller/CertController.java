@@ -1,12 +1,10 @@
-package be.nicholasmeyers.guardiangateway.certbot;
+package be.nicholasmeyers.guardiangateway.controller;
 
 import be.nicholasmeyers.guardiangateway.config.ApplicationConfig;
 import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
-import io.netty.resolver.NoopAddressResolverGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -14,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-import reactor.netty.http.client.HttpClient;
 
 import java.util.Map;
 import java.util.Optional;
@@ -25,35 +22,42 @@ public class CertController {
 
     private static final Logger log = LoggerFactory.getLogger(CertController.class);
 
-    private final ChallengeStore challengeStore;
     private final ApplicationProperties applicationProperties;
     private final WebClient webClient;
 
-    public CertController(ChallengeStore challengeStore, ApplicationProperties applicationProperties, WebClient.Builder webClientBuilder) {
-        this.challengeStore = challengeStore;
+    public CertController(ApplicationProperties applicationProperties, WebClient webClient) {
         this.applicationProperties = applicationProperties;
-        this.webClient = webClientBuilder
-                .clientConnector(new ReactorClientHttpConnector(
-                        HttpClient.create().resolver(NoopAddressResolverGroup.INSTANCE)
-                ))
-                .build();
+        this.webClient = webClient;
     }
 
     @GetMapping("/{token}")
     public Mono<String> getChallenge(@RequestHeader Map<String, String> headers, @PathVariable String token) {
-        log.info("Received ACME challenge with headers: {}", headers);
         Optional<String> host = Optional.ofNullable(headers.get("host"));
-        Optional<String> authorization = challengeStore.get(token);
-        if (authorization.isPresent()) {
-            log.info("Serving ACME challenge for token");
-            return Mono.just(authorization.get());
-        } else {
+        log.info("Challenge requested for token: {}", token);
+        log.info("Headers: {}", headers);
+
+        Mono<String> challenge = getChallengeFromGuardianCertManager(token);
+        if (challenge.equals(Mono.empty())) {
             if (host.isPresent()) {
-                return getChallengeFromUpstream(host.get(), token);
+                challenge = getChallengeFromUpstream("", token);
+                if (challenge.equals(Mono.empty())) {
+                    return Mono.empty();
+                }
+            } else {
+                log.warn("No host header found in request");
+                return Mono.empty();
             }
-            log.warn("ACME challenge token not found");
-            throw new RuntimeException("Token not found");
         }
+        return challenge;
+    }
+
+    private Mono<String> getChallengeFromGuardianCertManager(String token) {
+        log.info("Serving ACME challenge for token from guardian cert manager");
+        return webClient.get()
+                .uri("http://guardian-cert-manager:8080/api/v1/acme-challenge/" + token)
+                .retrieve()
+                .bodyToMono(String.class)
+                .doOnSubscribe(_ -> log.info("Fetching challenge from guardian cert manager"));
     }
 
     private Mono<String> getChallengeFromUpstream(String host, String token) {
