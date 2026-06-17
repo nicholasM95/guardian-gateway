@@ -11,3 +11,6 @@ spring:
           httpclient:
             ssl:
               use-insecure-trust-manager: true
+
+directory:
+  certificates-path: ${CERTIFICATES_PATH}

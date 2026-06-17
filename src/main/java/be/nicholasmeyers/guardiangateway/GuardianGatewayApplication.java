@@ -8,7 +8,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @SpringBootApplication
 @EnableConfigurationProperties(DirectoryPropertiesConfig.class)
 public class GuardianGatewayApplication {
-    static void main(String[] args) {
+    public static void main(String[] args) {
         SpringApplication.run(GuardianGatewayApplication.class, args);
     }
 }
