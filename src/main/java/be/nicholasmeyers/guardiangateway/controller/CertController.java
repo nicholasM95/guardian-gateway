@@ -46,7 +46,7 @@ public class CertController {
         Mono<String> challenge = getChallengeFromGuardianCertManager(token);
         if (challenge.equals(Mono.empty())) {
             if (host.isPresent()) {
-                challenge = getChallengeFromUpstream("", token);
+                challenge = getChallengeFromUpstream(host.get(), token);
                 if (challenge.equals(Mono.empty())) {
                     return Mono.empty();
                 }
@@ -63,6 +63,15 @@ public class CertController {
         return webClient.get()
                 .uri("http://guardian-cert-manager:8080/.well-known/acme-challenge/" + token)
                 .retrieve()
+                .onStatus(status -> status.value() == 404, response -> {
+                    log.warn("Resource not found (404) in guardian cert manager:");
+                    return Mono.empty();
+                })
+                .onStatus(HttpStatusCode::isError, response -> {
+                    log.error("guardian cert manager returned error status {}",
+                            response.statusCode().value());
+                    return Mono.empty();
+                })
                 .bodyToMono(String.class)
                 .doOnSubscribe(_ -> log.info("Fetching challenge from guardian cert manager"));
     }
