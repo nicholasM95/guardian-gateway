@@ -45,8 +45,7 @@ public class AccessLogFilter implements WebFilter {
                             ? exchange.getRequest().getURI().getScheme() : "unknown");
                     logEntry.put("port", String.valueOf(exchange.getRequest().getURI().getPort() != -1
                             ? exchange.getRequest().getURI().getPort() : getDefaultPort(exchange.getRequest().getURI().getScheme())));
-                    logEntry.put("client_ip", exchange.getRequest().getRemoteAddress() != null
-                            ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress() : "unknown");
+                    logEntry.put("client_ip", getClientIp(exchange));
                     logEntry.put("status_code", String.valueOf(exchange.getResponse().getStatusCode() != null
                             ? exchange.getResponse().getStatusCode().value() : 0));
                     logEntry.put("duration_ms", String.valueOf(duration));
@@ -71,6 +70,17 @@ public class AccessLogFilter implements WebFilter {
                             .then()
                             .subscribeOn(Schedulers.boundedElastic());
                 }));
+    }
+
+    private String getClientIp(ServerWebExchange exchange) {
+        String xForwardedFor = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            log.debug("X-Forwarded-For header found: {}", xForwardedFor);
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return exchange.getRequest().getRemoteAddress() != null
+                ? exchange.getRequest().getRemoteAddress().getAddress().getHostAddress()
+                : "unknown";
     }
 
     private int getDefaultPort(String scheme) {
