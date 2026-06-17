@@ -26,11 +26,13 @@ public class CertController {
     private static final Logger log = LoggerFactory.getLogger(CertController.class);
 
     private final ApplicationProperties applicationProperties;
-    private final WebClient webClient;
+    private final WebClient webClientCertManager;
+    private final WebClient webClientOthers;
 
     public CertController(ApplicationProperties applicationProperties, WebClient.Builder webClientBuilder) {
         this.applicationProperties = applicationProperties;
-        this.webClient = webClientBuilder
+        this.webClientCertManager = webClientBuilder.build();
+        this.webClientOthers = webClientBuilder
                 .clientConnector(new ReactorClientHttpConnector(
                         HttpClient.create().resolver(NoopAddressResolverGroup.INSTANCE)
                 ))
@@ -60,7 +62,7 @@ public class CertController {
 
     private Mono<String> getChallengeFromGuardianCertManager(String token) {
         log.info("Serving ACME challenge for token from guardian cert manager");
-        return webClient.get()
+        return webClientCertManager.get()
                 .uri("http://guardian-cert-manager:8080/.well-known/acme-challenge/" + token)
                 .retrieve()
                 .onStatus(status -> status.value() == 404, response -> {
@@ -85,7 +87,7 @@ public class CertController {
             service = service.replace("http://", "");
             service = service.replace(":443", ":80");
             String url = "http://" + service + "/.well-known/acme-challenge/" + token;
-            return webClient.get()
+            return webClientOthers.get()
                     .uri(url)
                     .header("Host", host)
                     .retrieve()
