@@ -62,7 +62,7 @@ public class AccessLogFilter implements WebFilter {
 
                     if (requestStatus == null || requestStatus.isEmpty()) {
                         log.error("Missing request status");
-                        requestStatus = "MISSING_STATUS";
+                        requestStatus = "MISSING";
                     }
                     logEntry.put("request_status", requestStatus);
 
