@@ -52,6 +52,7 @@ public class RedirectToHttps {
                         .toString();
 
                 log.info("Redirect to https: {}", httpsUrl);
+                exchange.getAttributes().put("status", "ALLOWED");
                 response.setStatusCode(HttpStatus.MOVED_PERMANENTLY);
                 response.getHeaders().setLocation(URI.create(httpsUrl));
                 return response.setComplete();

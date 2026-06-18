@@ -22,8 +22,14 @@ public class SecurityConfig {
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .exceptionHandling(e -> e
+                        .authenticationEntryPoint((exchange, ex) -> {
+                            log.info("Blocked request from {}", exchange.getRequest().getRemoteAddress());
+                            exchange.getAttributes().put("status", "BLOCKED");
+                            exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+                            return exchange.getResponse().setComplete();
+                        })
                         .accessDeniedHandler((exchange, denied) -> {
-                            log.info("Access denied for {}", exchange.getRequest().getRemoteAddress());
+                            log.info("Blocked request from {}", exchange.getRequest().getRemoteAddress());
                             exchange.getAttributes().put("status", "BLOCKED");
                             exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
                             return exchange.getResponse().setComplete();
