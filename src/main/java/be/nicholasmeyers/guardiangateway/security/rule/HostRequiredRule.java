@@ -22,11 +22,11 @@ public class HostRequiredRule {
 
     public GatewayFilter hostRequiredFilter() {
         return (exchange, chain) -> {
-            log.info("host required filter");
 
             String host = exchange.getRequest().getHeaders().getFirst("Host") != null
                     ? exchange.getRequest().getHeaders().getFirst("Host") : "N/A";
 
+            log.info("check if host: {} is valid", host);
             if (!isHostValid(host)) {
                 log.info("host {} is invalid", host);
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
