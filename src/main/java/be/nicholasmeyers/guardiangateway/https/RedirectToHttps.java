@@ -1,5 +1,7 @@
 package be.nicholasmeyers.guardiangateway.https;
 
+import be.nicholasmeyers.guardiangateway.config.ApplicationConfig;
+import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
@@ -13,10 +15,17 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 
 import java.net.URI;
+import java.util.List;
 
 @Component
 public class RedirectToHttps {
     private static final Logger log = LoggerFactory.getLogger(RedirectToHttps.class);
+
+    private final ApplicationProperties applicationProperties;
+
+    public RedirectToHttps(ApplicationProperties applicationProperties) {
+        this.applicationProperties = applicationProperties;
+    }
 
     @Bean
     public WebFilter httpsRedirectFilter() {
@@ -25,6 +34,13 @@ public class RedirectToHttps {
             ServerHttpResponse response = exchange.getResponse();
 
             String path = request.getURI().getPath();
+            String host = exchange.getRequest().getHeaders().getFirst("Host") != null
+                    ? exchange.getRequest().getHeaders().getFirst("Host") : "N/A";
+
+            if (!isHostValid(host)) {
+                log.info("Host {} is not allowed, so disable redirect", host);
+                return chain.filter(exchange);
+            }
 
             if (path.startsWith("/.well-known/acme-challenge")) {
                 log.info("No redirect for /.well-known/acme-challenge");
@@ -47,5 +63,10 @@ public class RedirectToHttps {
             }
             return chain.filter(exchange);
         };
+    }
+
+    private boolean isHostValid(String host) {
+        List<String> allowedHosts = applicationProperties.getConfig().stream().map(ApplicationConfig::getHost).toList();
+        return allowedHosts.contains(host);
     }
 }

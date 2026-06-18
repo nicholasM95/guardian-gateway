@@ -3,6 +3,7 @@ package be.nicholasmeyers.guardiangateway.filter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+@Order(-101)
 @Profile("access_log")
 @Component
 public class AccessLogFilter implements WebFilter {
@@ -58,9 +60,9 @@ public class AccessLogFilter implements WebFilter {
                     int statusCode = exchange.getResponse().getStatusCode() != null
                             ? exchange.getResponse().getStatusCode().value() : 0;
 
-                    if ((requestStatus == null || requestStatus.isEmpty()) && statusCode == 301) {
-                        log.info("Override request status to ALLOWED");
-                        requestStatus = "ALLOWED";
+                    if (requestStatus == null || requestStatus.isEmpty()) {
+                        log.error("Missing request status");
+                        requestStatus = "MISSING_STATUS";
                     }
                     logEntry.put("request_status", requestStatus);
 
