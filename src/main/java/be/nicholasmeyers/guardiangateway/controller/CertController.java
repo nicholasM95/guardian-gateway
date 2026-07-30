@@ -45,19 +45,14 @@ public class CertController {
         log.info("Challenge requested for token: {}", token);
         log.info("Headers: {}", headers);
 
-        Mono<String> challenge = getChallengeFromGuardianCertManager(token);
-        if (challenge.equals(Mono.empty())) {
-            if (host.isPresent()) {
-                challenge = getChallengeFromUpstream(host.get(), token);
-                if (challenge.equals(Mono.empty())) {
+        return getChallengeFromGuardianCertManager(token)
+                .switchIfEmpty(Mono.defer(() -> {
+                    if (host.isPresent()) {
+                        return getChallengeFromUpstream(host.get(), token);
+                    }
+                    log.warn("No host header found in request");
                     return Mono.empty();
-                }
-            } else {
-                log.warn("No host header found in request");
-                return Mono.empty();
-            }
-        }
-        return challenge;
+                }));
     }
 
     private Mono<String> getChallengeFromGuardianCertManager(String token) {
