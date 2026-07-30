@@ -5,7 +5,6 @@ import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
 import io.netty.resolver.NoopAddressResolverGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -59,17 +58,14 @@ public class CertController {
         log.info("Serving ACME challenge for token from guardian cert manager");
         return webClientCertManager.get()
                 .uri("http://guardian-cert-manager:8080/.well-known/acme-challenge/" + token)
-                .retrieve()
-                .onStatus(status -> status.value() == 404, response -> {
-                    log.warn("Resource not found (404) in guardian cert manager:");
-                    return Mono.empty();
+                .exchangeToMono(response -> {
+                    if (response.statusCode().isError()) {
+                        log.warn("guardian cert manager returned error status {}",
+                                response.statusCode().value());
+                        return response.releaseBody().then(Mono.empty());
+                    }
+                    return response.bodyToMono(String.class);
                 })
-                .onStatus(HttpStatusCode::isError, response -> {
-                    log.error("guardian cert manager returned error status {}",
-                            response.statusCode().value());
-                    return Mono.empty();
-                })
-                .bodyToMono(String.class)
                 .doOnSubscribe(_ -> log.info("Fetching challenge from guardian cert manager"));
     }
 
@@ -85,17 +81,14 @@ public class CertController {
             return webClientOthers.get()
                     .uri(url)
                     .header("Host", host)
-                    .retrieve()
-                    .onStatus(status -> status.value() == 404, response -> {
-                        log.warn("Resource not found (404): {} --- host: {}", url, host);
-                        return Mono.empty();
+                    .exchangeToMono(response -> {
+                        if (response.statusCode().isError()) {
+                            log.warn("Upstream returned error status {} for: {} --- host: {}",
+                                    response.statusCode().value(), url, host);
+                            return response.releaseBody().then(Mono.empty());
+                        }
+                        return response.bodyToMono(String.class);
                     })
-                    .onStatus(HttpStatusCode::isError, response -> {
-                        log.error("Upstream returned error status {} for: {} --- host: {}",
-                                response.statusCode().value(), url, host);
-                        return Mono.empty();
-                    })
-                    .bodyToMono(String.class)
                     .doOnSubscribe(sub -> log.info("Fetching challenge from upstream: {} --- host: {}", url, host));
         } else {
             log.warn("ACME challenge upstream not found: application config not found");
