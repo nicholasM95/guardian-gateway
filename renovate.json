@@ -6,7 +6,18 @@
   "assignees": [
     "nicholasM95"
   ],
-  "baseBranches": [
+  "baseBranchPatterns": [
     "develop"
+  ],
+  "packageRules": [
+    {
+      "matchFileNames": [
+        ".github/workflows/**",
+        ".mvn/wrapper/**"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "ignoreTests": true
+    }
   ]
 }

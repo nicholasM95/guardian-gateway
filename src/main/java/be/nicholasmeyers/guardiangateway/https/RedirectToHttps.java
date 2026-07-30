@@ -1,7 +1,9 @@
 package be.nicholasmeyers.guardiangateway.https;
 
-import java.util.logging.Logger;
-
+import be.nicholasmeyers.guardiangateway.config.ApplicationConfig;
+import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.server.reactive.ServerHttpRequest;
@@ -13,10 +15,17 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 
 import java.net.URI;
+import java.util.List;
 
 @Component
 public class RedirectToHttps {
-    private static final Logger logger = Logger.getLogger(RedirectToHttps.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(RedirectToHttps.class);
+
+    private final ApplicationProperties applicationProperties;
+
+    public RedirectToHttps(ApplicationProperties applicationProperties) {
+        this.applicationProperties = applicationProperties;
+    }
 
     @Bean
     public WebFilter httpsRedirectFilter() {
@@ -25,17 +34,25 @@ public class RedirectToHttps {
             ServerHttpResponse response = exchange.getResponse();
 
             String path = request.getURI().getPath();
+            String host = exchange.getRequest().getHeaders().getFirst("Host") != null
+                    ? exchange.getRequest().getHeaders().getFirst("Host") : "N/A";
+
+            if (!isHostValid(host)) {
+                log.info("Host {} is not allowed, so disable redirect", host);
+                return chain.filter(exchange);
+            }
 
             if (path.startsWith("/.well-known/acme-challenge")) {
-                logger.info("No redirect for /.well-known/acme-challenge");
+                log.info("No redirect for /.well-known/acme-challenge");
                 return chain.filter(exchange);
             } else if ("http".equals(request.getURI().getScheme())) {
-                logger.info("Redirect to https");
                 String httpsUrl = UriComponentsBuilder.fromUri(request.getURI())
                         .scheme("https")
                         .build()
                         .toString();
 
+                log.info("Redirect to https: {}", httpsUrl);
+                exchange.getAttributes().put("status", "ALLOWED");
                 response.setStatusCode(HttpStatus.MOVED_PERMANENTLY);
                 response.getHeaders().setLocation(URI.create(httpsUrl));
                 return response.setComplete();
@@ -47,5 +64,10 @@ public class RedirectToHttps {
             }
             return chain.filter(exchange);
         };
+    }
+
+    private boolean isHostValid(String host) {
+        List<String> allowedHosts = applicationProperties.getConfig().stream().map(ApplicationConfig::getHost).toList();
+        return allowedHosts.contains(host);
     }
 }

@@ -1,0 +1,98 @@
+package be.nicholasmeyers.guardiangateway.controller;
+
+import be.nicholasmeyers.guardiangateway.config.ApplicationConfig;
+import be.nicholasmeyers.guardiangateway.config.ApplicationProperties;
+import io.netty.resolver.NoopAddressResolverGroup;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import reactor.netty.http.client.HttpClient;
+
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping("/.well-known/acme-challenge")
+public class CertController {
+
+    private static final Logger log = LoggerFactory.getLogger(CertController.class);
+
+    private final ApplicationProperties applicationProperties;
+    private final WebClient webClientCertManager;
+    private final WebClient webClientOthers;
+
+    public CertController(ApplicationProperties applicationProperties, WebClient.Builder webClientBuilder) {
+        this.applicationProperties = applicationProperties;
+        this.webClientCertManager = webClientBuilder.build();
+        this.webClientOthers = webClientBuilder
+                .clientConnector(new ReactorClientHttpConnector(
+                        HttpClient.create().resolver(NoopAddressResolverGroup.INSTANCE)
+                ))
+                .build();
+    }
+
+    @GetMapping("/{token}")
+    public Mono<String> getChallenge(@RequestHeader Map<String, String> headers, @PathVariable String token) {
+        Optional<String> host = Optional.ofNullable(headers.get("host"));
+        log.info("Challenge requested for token: {}", token);
+        log.info("Headers: {}", headers);
+
+        return getChallengeFromGuardianCertManager(token)
+                .switchIfEmpty(Mono.defer(() -> {
+                    if (host.isPresent()) {
+                        return getChallengeFromUpstream(host.get(), token);
+                    }
+                    log.warn("No host header found in request");
+                    return Mono.empty();
+                }));
+    }
+
+    private Mono<String> getChallengeFromGuardianCertManager(String token) {
+        log.info("Serving ACME challenge for token from guardian cert manager");
+        return webClientCertManager.get()
+                .uri("http://guardian-cert-manager:8080/.well-known/acme-challenge/" + token)
+                .exchangeToMono(response -> {
+                    if (response.statusCode().isError()) {
+                        log.warn("guardian cert manager returned error status {}",
+                                response.statusCode().value());
+                        return response.releaseBody().then(Mono.empty());
+                    }
+                    return response.bodyToMono(String.class);
+                })
+                .doOnSubscribe(_ -> log.info("Fetching challenge from guardian cert manager"));
+    }
+
+    private Mono<String> getChallengeFromUpstream(String host, String token) {
+        log.info("Serving ACME challenge for token from upstream");
+        Optional<ApplicationConfig> config = applicationProperties.findConfigByHost(host);
+        if (config.isPresent()) {
+            String service = config.get().getService();
+            service = service.replace("https://", "");
+            service = service.replace("http://", "");
+            service = service.replace(":443", ":80");
+            String url = "http://" + service + "/.well-known/acme-challenge/" + token;
+            return webClientOthers.get()
+                    .uri(url)
+                    .header("Host", host)
+                    .exchangeToMono(response -> {
+                        if (response.statusCode().isError()) {
+                            log.warn("Upstream returned error status {} for: {} --- host: {}",
+                                    response.statusCode().value(), url, host);
+                            return response.releaseBody().then(Mono.empty());
+                        }
+                        return response.bodyToMono(String.class);
+                    })
+                    .doOnSubscribe(sub -> log.info("Fetching challenge from upstream: {} --- host: {}", url, host));
+        } else {
+            log.warn("ACME challenge upstream not found: application config not found");
+            return Mono.just("");
+        }
+    }
+}
