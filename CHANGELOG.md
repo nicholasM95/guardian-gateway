@@ -1,3 +1,14 @@
+# [1.1.0](https://github.com/nicholasM95/guardian-gateway/compare/v1.0.1...v1.1.0) (2026-07-30)
+
+
+### Features
+
+* add cors issues ([06a4f93](https://github.com/nicholasM95/guardian-gateway/commit/06a4f9337f9e39087f253e5cfb63f1563f267496))
+* add host required rule ([17fc93b](https://github.com/nicholasM95/guardian-gateway/commit/17fc93b0a44e309a5370f2cf923daba5a8db51f2))
+* add option to configure a redirect ([a3e4ead](https://github.com/nicholasM95/guardian-gateway/commit/a3e4eadc633feb2d6cfe6d1c9133ab41ad4f95ab))
+* add port and schema ([f2efd47](https://github.com/nicholasM95/guardian-gateway/commit/f2efd47def6392785e16c455338b90b8de688acf))
+* push log events ([727c7e6](https://github.com/nicholasM95/guardian-gateway/commit/727c7e6991c937616a15de866ec5badc2fc6f7f1))
+
 ## [1.0.1](https://github.com/nicholasM95/guardian-gateway/compare/v1.0.0...v1.0.1) (2025-07-28)
 
 
